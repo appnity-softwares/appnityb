@@ -1,0 +1,7 @@
+.env
+bin/
+uploads/*
+!uploads/.gitkeep
+*.exe
+*.test
+.DS_Store

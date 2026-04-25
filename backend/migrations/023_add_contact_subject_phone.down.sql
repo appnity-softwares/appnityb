@@ -1,0 +1,2 @@
+ALTER TABLE contacts DROP COLUMN IF EXISTS subject;
+ALTER TABLE contacts DROP COLUMN IF EXISTS phone;

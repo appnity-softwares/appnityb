@@ -1,0 +1,3 @@
+2026/04/09 15:06:10 Connected to database successfully
+2026/04/09 15:06:10 Server starting on port 8080
+2026/04/09 15:06:10 Server failed: listen tcp :8080: bind: address already in use

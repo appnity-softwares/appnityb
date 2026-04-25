@@ -1,0 +1,2 @@
+ALTER TABLE pricing ADD COLUMN IF NOT EXISTS icon VARCHAR(50) DEFAULT 'star';
+ALTER TABLE pricing ADD COLUMN IF NOT EXISTS gradient TEXT DEFAULT 'from-white to-gray-50';
