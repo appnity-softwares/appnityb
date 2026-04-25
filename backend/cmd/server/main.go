@@ -16,6 +16,7 @@ import (
 	"github.com/appnity/backend/internal/repository"
 	"github.com/appnity/backend/internal/service"
 	jwtpkg "github.com/appnity/backend/pkg/jwt"
+	"github.com/appnity/backend/pkg/redis"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -29,6 +30,15 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Initialize Redis
+	redisService, err := redis.NewRedisService()
+	if err != nil {
+		log.Printf("Warning: failed to connect to redis: %v", err)
+	} else {
+		log.Println("Connected to Redis successfully")
+		_ = redisService // Available for future use
+	}
 
 	jwtService := jwtpkg.NewJWTService(
 		cfg.JWTSecret,
@@ -123,6 +133,7 @@ func main() {
 			// Protected admin routes
 			r.Group(func(r chi.Router) {
 				r.Use(authMW.Auth)
+				r.Use(authMW.AdminOnly)
 
 				r.Get("/auth/me", authHandler.GetMe)
 				r.Put("/auth/profile", authHandler.UpdateProfile)

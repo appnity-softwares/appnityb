@@ -137,3 +137,25 @@ func (r *ComponentRepository) ToggleVisibility(ctx context.Context, id uuid.UUID
 	}
 	return nil
 }
+
+func (r *ComponentRepository) GetByPageSlug(ctx context.Context, slug string) ([]models.Component, error) {
+	query := `SELECT c.id, c.page_id, c.component_type, c.is_visible, c.content, c.order_index, c.created_at, c.updated_at
+		FROM components c
+		JOIN pages p ON c.page_id = p.id
+		WHERE p.slug = $1 AND c.is_visible = true
+		ORDER BY c.order_index`
+	rows, err := r.db.Query(ctx, query, slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var components []models.Component
+	for rows.Next() {
+		var c models.Component
+		if err := rows.Scan(&c.ID, &c.PageID, &c.ComponentType, &c.IsVisible, &c.Content, &c.OrderIndex, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		components = append(components, c)
+	}
+	return components, nil
+}

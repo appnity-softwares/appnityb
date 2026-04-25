@@ -150,3 +150,16 @@ func (r *BlogRepository) GetRelated(ctx context.Context, id uuid.UUID, category 
 	}
 	return blogs, nil
 }
+
+func (r *BlogRepository) GetRelatedBySlug(ctx context.Context, slug string, limit int) ([]models.Blog, error) {
+	// First get the blog to find its category and ID
+	query := `SELECT id, category FROM blogs WHERE slug = $1`
+	var id uuid.UUID
+	var category string
+	err := r.db.QueryRow(ctx, query, slug).Scan(&id, &category)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.GetRelated(ctx, id, category, limit)
+}

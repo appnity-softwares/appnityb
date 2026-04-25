@@ -8,61 +8,23 @@ import (
 	"github.com/appnity/backend/internal/models"
 	"github.com/appnity/backend/internal/service"
 	"github.com/appnity/backend/pkg/response"
-	"github.com/google/uuid"
 )
 
 type PublicHandler struct {
 	contentService *service.ContentService
-	themeService   *service.ThemeService
 }
 
-func NewPublicHandler(contentService *service.ContentService, themeService *service.ThemeService) *PublicHandler {
-	return &PublicHandler{
-		contentService: contentService,
-		themeService:   themeService,
-	}
+func NewPublicHandler(contentService *service.ContentService) *PublicHandler {
+	return &PublicHandler{contentService: contentService}
 }
 
 func (h *PublicHandler) GetTheme(w http.ResponseWriter, r *http.Request) {
-	theme, err := h.themeService.GetActiveTheme(r.Context())
+	theme, err := h.contentService.GetTheme(r.Context())
 	if err != nil {
-		theme = h.getDefaultTheme()
+		response.Error(w, "failed to get theme", http.StatusInternalServerError)
+		return
 	}
-
 	response.Success(w, "theme retrieved", theme, http.StatusOK)
-}
-
-func (h *PublicHandler) getDefaultTheme() *models.Theme {
-	defaultColors := map[string]string{
-		"primary":       "#ff6b00",
-		"secondary":     "#1a1a1a",
-		"accent":        "#ffffff",
-		"background":    "#0a0a0a",
-		"text":          "#ffffff",
-		"surface":       "#1a1a1a",
-		"border":        "#2a2a2a",
-		"gradientStart": "#ff6b00",
-		"gradientEnd":   "#ff8533",
-		"error":         "#ef4444",
-		"success":       "#22c55e",
-		"warning":       "#f59e0b",
-		"muted":         "#6b7280",
-		"textSecondary": "#a0a0a0",
-	}
-	defaultFonts := map[string]string{
-		"heading": "Poppins",
-		"body":    "Inter",
-	}
-
-	colorsBytes, _ := json.Marshal(defaultColors)
-	fontsBytes, _ := json.Marshal(defaultFonts)
-
-	return &models.Theme{
-		Name:     "Default Dark Orange",
-		IsActive: true,
-		Colors:   colorsBytes,
-		Fonts:    fontsBytes,
-	}
 }
 
 func (h *PublicHandler) GetNavigation(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +33,6 @@ func (h *PublicHandler) GetNavigation(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, "failed to get navigation", http.StatusInternalServerError)
 		return
 	}
-
 	response.Success(w, "navigation retrieved", nav, http.StatusOK)
 }
 
@@ -92,19 +53,13 @@ func (h *PublicHandler) GetPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) GetPageComponents(w http.ResponseWriter, r *http.Request) {
-	pageIDStr := r.PathValue("page_id")
-	if pageIDStr == "" {
-		response.Error(w, "page_id is required", http.StatusBadRequest)
+	slug := r.PathValue("slug")
+	if slug == "" {
+		response.Error(w, "page slug is required", http.StatusBadRequest)
 		return
 	}
 
-	pageID, err := uuid.Parse(pageIDStr)
-	if err != nil {
-		response.Error(w, "invalid page ID", http.StatusBadRequest)
-		return
-	}
-
-	components, err := h.contentService.GetComponentsByPageID(r.Context(), pageID)
+	components, err := h.contentService.GetPageComponentsBySlug(r.Context(), slug)
 	if err != nil {
 		response.Error(w, "failed to get components", http.StatusInternalServerError)
 		return
@@ -114,7 +69,14 @@ func (h *PublicHandler) GetPageComponents(w http.ResponseWriter, r *http.Request
 }
 
 func (h *PublicHandler) GetBlogs(w http.ResponseWriter, r *http.Request) {
-	page, pageSize := parsePagination(r)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	if pageSize < 1 {
+		pageSize = 10
+	}
 
 	blogs, total, err := h.contentService.GetPublishedBlogs(r.Context(), page, pageSize)
 	if err != nil {
@@ -122,7 +84,10 @@ func (h *PublicHandler) GetBlogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Paginated(w, "blogs retrieved", blogs, total, int64(page), int64(pageSize))
+	response.Success(w, "blogs retrieved", map[string]interface{}{
+		"data":  blogs,
+		"total": total,
+	}, http.StatusOK)
 }
 
 func (h *PublicHandler) GetBlogBySlug(w http.ResponseWriter, r *http.Request) {
@@ -142,26 +107,13 @@ func (h *PublicHandler) GetBlogBySlug(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) GetRelatedBlogs(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	if idStr == "" {
-		response.Error(w, "blog ID is required", http.StatusBadRequest)
+	slug := r.PathValue("slug")
+	if slug == "" {
+		response.Error(w, "blog slug is required", http.StatusBadRequest)
 		return
 	}
 
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		response.Error(w, "invalid blog ID", http.StatusBadRequest)
-		return
-	}
-
-	category := r.URL.Query().Get("category")
-	limitStr := r.URL.Query().Get("limit")
-	limit := 5
-	if limitStr != "" {
-		limit, _ = strconv.Atoi(limitStr)
-	}
-
-	blogs, err := h.contentService.GetRelatedBlogs(r.Context(), id, category, limit)
+	blogs, err := h.contentService.GetRelatedBlogsBySlug(r.Context(), slug)
 	if err != nil {
 		response.Error(w, "failed to get related blogs", http.StatusInternalServerError)
 		return
@@ -171,16 +123,26 @@ func (h *PublicHandler) GetRelatedBlogs(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *PublicHandler) GetPortfolios(w http.ResponseWriter, r *http.Request) {
-	page, pageSize := parsePagination(r)
 	category := r.URL.Query().Get("category")
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	if pageSize < 1 {
+		pageSize = 10
+	}
 
-	portfolios, total, err := h.contentService.GetPortfoliosByCategory(r.Context(), category, page, pageSize)
+	portfolios, total, err := h.contentService.GetAllPortfolios(r.Context(), true, category, page, pageSize)
 	if err != nil {
 		response.Error(w, "failed to get portfolios", http.StatusInternalServerError)
 		return
 	}
 
-	response.Paginated(w, "portfolios retrieved", portfolios, total, int64(page), int64(pageSize))
+	response.Success(w, "portfolios retrieved", map[string]interface{}{
+		"data":  portfolios,
+		"total": total,
+	}, http.StatusOK)
 }
 
 func (h *PublicHandler) GetFeaturedPortfolio(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +198,7 @@ func (h *PublicHandler) GetFAQs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Success(w, "FAQs retrieved", faqs, http.StatusOK)
+	response.Success(w, "faqs retrieved", faqs, http.StatusOK)
 }
 
 func (h *PublicHandler) GetPricing(w http.ResponseWriter, r *http.Request) {
@@ -302,32 +264,23 @@ func (h *PublicHandler) GetSocialLinks(w http.ResponseWriter, r *http.Request) {
 func (h *PublicHandler) GetSEO(w http.ResponseWriter, r *http.Request) {
 	seo, err := h.contentService.GetSEOSettings(r.Context())
 	if err != nil {
-		response.Error(w, "failed to get SEO settings", http.StatusNotFound)
+		response.Error(w, "failed to get SEO settings", http.StatusInternalServerError)
 		return
 	}
 
-	response.Success(w, "SEO settings retrieved", seo, http.StatusOK)
+	response.Success(w, "seo retrieved", seo, http.StatusOK)
 }
 
 func (h *PublicHandler) SubmitContact(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name    string `json:"name"`
-		Email   string `json:"email"`
-		Service string `json:"service"`
-		Message string `json:"message"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var contact models.Contact
+	if err := json.NewDecoder(r.Body).Decode(&contact); err != nil {
 		response.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	contact := models.Contact{
-		Name:    req.Name,
-		Email:   req.Email,
-		Service: req.Service,
-		Message: req.Message,
-		Status:  "new",
+	if contact.Email == "" {
+		response.Error(w, "email is required", http.StatusBadRequest)
+		return
 	}
 
 	if err := h.contentService.CreateContactSubmission(r.Context(), &contact); err != nil {
@@ -335,29 +288,5 @@ func (h *PublicHandler) SubmitContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Success(w, "contact form submitted", nil, http.StatusCreated)
-}
-
-func parsePagination(r *http.Request) (int, int) {
-	page := 1
-	pageSize := 10
-
-	if p := r.URL.Query().Get("page"); p != "" {
-		page, _ = strconv.Atoi(p)
-		if page < 1 {
-			page = 1
-		}
-	}
-
-	if ps := r.URL.Query().Get("page_size"); ps != "" {
-		pageSize, _ = strconv.Atoi(ps)
-		if pageSize < 1 {
-			pageSize = 10
-		}
-		if pageSize > 100 {
-			pageSize = 100
-		}
-	}
-
-	return page, pageSize
+	response.Success(w, "contact submitted successfully", nil, http.StatusCreated)
 }

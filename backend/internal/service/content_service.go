@@ -101,6 +101,10 @@ func (s *ContentService) GetRelatedBlogs(ctx context.Context, id uuid.UUID, cate
 	return s.blogRepo.GetRelated(ctx, id, category, limit)
 }
 
+func (s *ContentService) GetRelatedBlogsBySlug(ctx context.Context, slug string) ([]models.Blog, error) {
+	return s.blogRepo.GetRelatedBySlug(ctx, slug, 5)
+}
+
 func (s *ContentService) GetAllPortfolios(ctx context.Context, visibleOnly bool, category string, page, pageSize int) ([]models.Portfolio, int64, error) {
 	return s.portfolioRepo.GetAll(ctx, visibleOnly, category, page, pageSize)
 }
@@ -379,6 +383,10 @@ func (s *ContentService) DeleteComponent(ctx context.Context, id uuid.UUID) erro
 
 func (s *ContentService) ReorderComponents(ctx context.Context, pageID uuid.UUID, ids []uuid.UUID) error {
 	return s.componentRepo.Reorder(ctx, pageID, ids)
+}
+
+func (s *ContentService) GetPageComponentsBySlug(ctx context.Context, slug string) ([]models.Component, error) {
+	return s.componentRepo.GetByPageSlug(ctx, slug)
 }
 
 func (s *ContentService) ToggleComponentVisibility(ctx context.Context, id uuid.UUID) error {
